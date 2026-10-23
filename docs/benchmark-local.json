@@ -1,0 +1,20 @@
+{
+  "verified_at": "2026-10-23T09:41:53.585007+00:00",
+  "base_url": "http://127.0.0.1:8000",
+  "unique_transactions": 20,
+  "duplicate_requests": 40,
+  "concurrency": 20,
+  "transport": "real HTTP, persistent connections",
+  "acknowledgment_ms": {
+    "p50": 22.03,
+    "p95": 81.17,
+    "p99": 89.03,
+    "maximum": 89.03
+  },
+  "completed_transactions": 20,
+  "processing_seconds": {
+    "minimum": 30.122,
+    "maximum": 30.133
+  },
+  "acknowledgment_target_met": true
+}

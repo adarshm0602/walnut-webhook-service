@@ -189,6 +189,73 @@ async def test_exact_amount_serialization_without_float_round_trip(context):
     assert '"amount":9999999999999999.99' in response.text
 
 
+async def test_numeric_json_amount_is_not_rounded_before_validation(context):
+    _, store, client = context
+    # A numeric JSON literal must be just as precise as the supported string form.
+    data = (
+        '{"transaction_id":"txn_precise","source_account":"acc_user",'
+        '"destination_account":"acc_merchant","amount":1234567890123456.78,"currency":"INR"}'
+    )
+    response = await client.post(
+        "/v1/webhooks/transactions", content=data, headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 202
+    assert (await store.get("txn_precise"))["amount"] == Decimal("1234567890123456.78")
+    result = await client.get("/v1/transactions/txn_precise")
+    assert '"amount":1234567890123456.78' in result.text
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity", "1e9999", "1.001"])
+async def test_invalid_numeric_literals_are_validation_errors_not_server_errors(context, literal):
+    _, store, client = context
+    data = (
+        '{"transaction_id":"txn_bad_number","source_account":"acc_user",'
+        f'"destination_account":"acc_merchant","amount":{literal},"currency":"INR"}}'
+    )
+    response = await client.post(
+        "/v1/webhooks/transactions", content=data, headers={"Content-Type": "application/json"}
+    )
+    assert response.status_code == 422
+    assert "input" not in response.json()["detail"][0]
+    assert await counts(store) == {"transactions": 0, "jobs": 0}
+
+
+async def test_database_lock_timeout_rolls_back_and_sender_can_retry(context):
+    _, store, client = context
+    async with store.pool.connection() as blocker:
+        await blocker.execute("LOCK TABLE jobs IN ACCESS EXCLUSIVE MODE")
+        started = perf_counter()
+        response = await client.post("/v1/webhooks/transactions", json=payload())
+        assert response.status_code == 503
+        assert perf_counter() - started < 0.5
+    assert await counts(store) == {"transactions": 0, "jobs": 0}
+    response = await client.post("/v1/webhooks/transactions", json=payload())
+    assert response.status_code == 202 and not response.json()["duplicate"]
+    assert await counts(store) == {"transactions": 1, "jobs": 1}
+
+
+async def test_completion_is_atomic_when_transaction_update_fails(context):
+    settings, store, client = context
+    await client.post("/v1/webhooks/transactions", json=payload())
+    job = await store.claim(settings.lease_seconds)
+    async with store.pool.connection() as connection:
+        await connection.execute(
+            "ALTER TABLE transactions ADD CONSTRAINT force_failure "
+            "CHECK (status = 'PROCESSING') NOT VALID"
+        )
+    with pytest.raises(DatabaseError):
+        await store.complete(job)
+    async with store.pool.connection() as connection:
+        cursor = await connection.execute("SELECT completed_at, lease_token FROM jobs")
+        unchanged = await cursor.fetchone()
+        assert unchanged["completed_at"] is None
+        assert unchanged["lease_token"] == job["lease_token"]
+        await connection.execute("ALTER TABLE transactions DROP CONSTRAINT force_failure")
+    assert (await store.get("txn_test_001"))["status"] == "PROCESSING"
+    assert await store.complete(job)
+    assert (await store.get("txn_test_001"))["status"] == "PROCESSED"
+
+
 @pytest.mark.slow
 async def test_real_30_second_processing_and_fast_acknowledgments_under_load(context):
     settings, store, client = context

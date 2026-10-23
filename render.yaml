@@ -1,0 +1,51 @@
+# Applying this Blueprint provisions PAID, always-on resources. Review cost first.
+services:
+  - type: web
+    name: walnut-transactions-api
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    healthCheckPath: /
+    preDeployCommand: python -m app.migrate
+    dockerCommand: sh -c 'exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"'
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: walnut-transactions-db
+          property: connectionString
+      - key: PYTHONUNBUFFERED
+        value: "1"
+  - type: worker
+    name: walnut-transactions-worker
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    # Both services can race on their first boot; migrations serialize safely.
+    dockerCommand: sh -c 'python -m app.migrate && exec python -m app.worker'
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: walnut-transactions-db
+          property: connectionString
+      - key: PROCESSING_DELAY_SECONDS
+        value: "30"
+      - key: WORKER_CONCURRENCY
+        value: "20"
+      - key: LEASE_SECONDS
+        value: "60"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+databases:
+  - name: walnut-transactions-db
+    plan: 0.1c-256mb
+    region: singapore
+    postgresMajorVersion: "17"
+    databaseName: walnut
+    user: walnut
+    diskSizeGB: 1
+    ipAllowList: []

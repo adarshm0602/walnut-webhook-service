@@ -175,8 +175,10 @@ attempt. This provides one stored transaction and final result. Work execution i
 at least once across crashes, not a claim of exactly-once external side effects. A real
 payment integration must also pass an idempotency key to the external provider.
 
-**Money and time.** Amounts use Python `Decimal`, PostgreSQL `numeric(18,2)`, and direct
-Decimal-to-JSON-number serialization. The supplied amount is stored in the same unit
+**Money and time.** Numeric JSON amounts are parsed directly into Python `Decimal`,
+stored as PostgreSQL `numeric(18,2)`, and serialized directly back to JSON numbers.
+This avoids a float round-trip at both the request and response boundaries.
+The supplied amount is stored in the same unit
 as received; no paise/rupee conversion is assumed. Amounts must be positive with at most
 two decimal places. Currency is normalized to three uppercase letters (not checked
 against an ISO registry). UTC timestamps come from PostgreSQL for transaction events.
@@ -202,10 +204,38 @@ Coverage includes concurrent duplicates, duplicate delivery after completion, re
 concurrent claims, lease renewal, crash recovery, stale-worker fencing, failure retries,
 validation, exact decimal serialization, and missing-storage responses.
 
+Additional regression tests verify exact numeric JSON input, non-finite number rejection,
+lock contention with safe retries, and rollback of a partially attempted completion.
+
+### Reproduce the HTTP benchmark
+
+```sh
+uv run python scripts/benchmark.py --output .local/benchmark.json
+# Against the deployed API, from the machine used for testing:
+uv run python scripts/benchmark.py --base-url https://YOUR-SERVICE-URL --output .local/cloud-benchmark.json
+```
+
+The default run sends 20 unique transactions and 40 duplicate deliveries, with at most
+20 HTTP requests in flight. It reports client-observed p50/p95/p99 and maximum latency,
+waits for all 20 final results, and verifies the minimum 30-second processing delay.
+It exits nonzero on failed acknowledgments, missed latency targets, or incomplete work.
+See [verification evidence](docs/verification.md) for measured results and their scope.
+
 ## Manual cloud deployment (after local acceptance)
 
-The repository is ready for a Python web service and a continuously running worker
-sharing a cloud PostgreSQL database. Nothing is deployed automatically by this project.
+The [Render Blueprint](render.yaml) declares an API, a continuously running worker,
+and private-network PostgreSQL in Singapore. It uses paid, always-on compute to avoid
+the free web service's idle cold starts. Review Render's displayed price before applying.
+The default configuration is approximately USD 20/month in base compute at the prices
+checked on 23 October 2026, before tax and usage overages. No workspace upgrade is needed.
+Applying a Blueprint is an explicit deployment action; checking this file into Git alone
+does not provision infrastructure.
+
+The API runs migrations in a pre-deploy step. The worker also applies idempotent migrations
+at startup so initial creation cannot race the API. PostgreSQL advisory locking serializes
+concurrent migrations. Automatic redeploys wait for GitHub checks to pass.
+
+For a provider-neutral deployment:
 
 1. Provision cloud PostgreSQL and give both services its credentialed `DATABASE_URL`.
 2. Build both services with `uv sync --frozen --no-dev`.

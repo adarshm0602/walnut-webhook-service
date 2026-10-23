@@ -7,12 +7,14 @@ from uuid import uuid4
 
 import simplejson
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from psycopg import Error as DatabaseError
 from psycopg_pool import PoolTimeout
 
 from app.config import Settings
 from app.db import make_pool
+from app.json_route import DecimalRoute
 from app.logging_config import configure_logging
 from app.models import Acknowledgment, HealthOutput, TransactionInput, TransactionOutput
 from app.store import ConflictingTransaction, Store
@@ -57,6 +59,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ),
         lifespan=lifespan,
     )
+    application.router.route_class = DecimalRoute
+
+    @application.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, exc: RequestValidationError):
+        # Do not echo financial payloads or serialize arbitrary invalid Decimal inputs.
+        details = [
+            {"loc": error["loc"], "msg": error["msg"], "type": error["type"]}
+            for error in exc.errors()
+        ]
+        return JSONResponse({"detail": details}, status_code=422)
 
     @application.middleware("http")
     async def request_metrics(request: Request, call_next):
