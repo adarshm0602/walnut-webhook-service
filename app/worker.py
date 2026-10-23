@@ -53,13 +53,16 @@ async def process_job(store: Store, job: dict, settings: Settings) -> None:
             await renewal
 
 
-async def worker_slot(store: Store, settings: Settings) -> None:
+async def worker_slot(store: Store, settings: Settings, claim_lock: asyncio.Lock) -> None:
     while True:
         try:
-            job = await store.claim(settings.lease_seconds)
-            if job is None:
-                await asyncio.sleep(settings.poll_interval_seconds)
-            else:
+            # Share one idle poll across slots; processing remains concurrent. This
+            # avoids N identical empty queries per interval on small cloud instances.
+            async with claim_lock:
+                job = await store.claim(settings.lease_seconds)
+                if job is None:
+                    await asyncio.sleep(settings.poll_interval_seconds)
+            if job is not None:
                 await process_job(store, job, settings)
         except asyncio.CancelledError:
             raise
@@ -77,8 +80,9 @@ async def run() -> None:
         loop.add_signal_handler(signum, stopped.set)
     pool = make_pool(settings)
     await pool.open(wait=True, timeout=10)
+    claim_lock = asyncio.Lock()
     slots = [
-        asyncio.create_task(worker_slot(Store(pool), settings))
+        asyncio.create_task(worker_slot(Store(pool), settings, claim_lock))
         for _ in range(settings.worker_concurrency)
     ]
     logger.info(

@@ -260,7 +260,8 @@ async def test_completion_is_atomic_when_transaction_update_fails(context):
 async def test_real_30_second_processing_and_fast_acknowledgments_under_load(context):
     settings, store, client = context
     settings = settings.model_copy(update={"processing_delay_seconds": 30, "lease_seconds": 60})
-    slots = [asyncio.create_task(worker_slot(store, settings)) for _ in range(20)]
+    claim_lock = asyncio.Lock()
+    slots = [asyncio.create_task(worker_slot(store, settings, claim_lock)) for _ in range(20)]
 
     async def send(index):
         started = perf_counter()

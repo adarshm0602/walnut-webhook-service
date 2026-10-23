@@ -5,6 +5,15 @@ reliably in the background. Built for the Walnut Folks backend assessment.
 
 **Stack:** FastAPI · PostgreSQL · psycopg 3 · asyncio worker · pytest
 
+## Public demo
+
+- API health: https://walnut-transactions-free.onrender.com/
+- Interactive API docs: https://walnut-transactions-free.onrender.com/docs
+
+Free Render hosting sleeps after inactivity; open the health URL and allow the instance
+about a minute to wake before testing. The first request can exceed 500 ms. The free
+database expires on **22 November 2026**. See hosting limits below.
+
 ## Try the running local service
 
 Open **http://127.0.0.1:8000/docs** for interactive API documentation.

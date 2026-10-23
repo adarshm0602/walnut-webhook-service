@@ -15,6 +15,8 @@ receives 409 and does not overwrite the accepted transaction.
 A worker slot claims an available job with `FOR UPDATE SKIP LOCKED`, records a lease token,
 and commits. Its 30-second `asyncio.sleep` simulates external I/O outside the transaction.
 Twenty slots can wait concurrently; the API and worker run as separate processes.
+A shared claim lock serializes brief claims and empty-queue polling, avoiding twenty
+redundant idle queries per polling interval. The 30-second work runs outside that lock.
 
 The queue can build a backlog when arrival rate exceeds worker throughput. With 20 slots
 and 30 seconds per transaction, nominal worker capacity is roughly 40 transactions per
@@ -62,3 +64,16 @@ localhost results do not establish cloud latency.
 The public assessment API accepts the supplied unauthenticated test contract. Actual
 payment ingestion would add provider signature verification, rate limiting, credential
 management, monitoring, and retention requirements. No real account balances are modified.
+
+## Free cloud demo
+
+The Render demo uses one free Docker web service with separate supervised API/worker
+processes and free PostgreSQL on the private network in Singapore. This reduces hosting
+cost to zero at the expense of process isolation and always-on availability. The supervisor
+terminates both processes if either exits unexpectedly. Migrations run before child startup.
+
+After 15 minutes without incoming traffic, the web service sleeps and background work
+pauses. A later request wakes it; pending jobs are persisted and can be reclaimed. Cold
+starts exceed the 500 ms target. Free PostgreSQL expires on 22 November 2026. Warm latency
+and burst capacity are measured separately in the verification report. Always-on hosting
+would be needed for a dependable first-request latency target.

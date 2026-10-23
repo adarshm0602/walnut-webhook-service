@@ -4,9 +4,10 @@ Verified locally on 23 October 2026 using Python 3.12.12 and PostgreSQL 17.
 
 ## Automated integration tests
 
-`uv run python -m pytest -v -s` — **29 passed in 32.69 seconds**.
+`uv run python -m pytest -v -s` — **31 passed in 33.77 seconds**.
 
-The suite uses real PostgreSQL with an isolated schema per test. It includes the real
+The transaction suite uses real PostgreSQL with an isolated schema per test. Two additional
+process-supervisor tests verify sibling termination and forced shutdown after the grace period. It includes the real
 30-second simulation under 20 concurrent transactions, simultaneous duplicates, exact
 numeric JSON amounts, invalid numbers, database lock timeouts, rollback on both acceptance
 and completion failures, lease renewal, stale-worker fencing, and retry recovery.

@@ -16,8 +16,10 @@ class Store:
     async def accept(self, transaction: TransactionInput) -> bool:
         """Return True for an identical duplicate; commit before acknowledging."""
         async with self.pool.connection() as connection:
-            await connection.execute("SET LOCAL statement_timeout = '200ms'")
-            await connection.execute("SET LOCAL lock_timeout = '150ms'")
+            await connection.execute(
+                "SELECT set_config('statement_timeout', '200ms', true), "
+                "set_config('lock_timeout', '150ms', true)"
+            )
             cursor = await connection.execute(
                 """
                 INSERT INTO transactions
