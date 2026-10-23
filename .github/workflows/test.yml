@@ -1,0 +1,58 @@
+name: Tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: walnut
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: walnut
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U walnut -d walnut"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://walnut:test-only-password@127.0.0.1:5432/walnut
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run python -m pytest -v
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - run: docker compose up --build -d
+      - name: Wait for API readiness
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8000/; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose logs
+          exit 1
+      - run: uv run python scripts/demo.py
+      - if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down

@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: walnut
+      POSTGRES_PASSWORD: local-development-only
+      POSTGRES_DB: walnut
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U walnut -d walnut"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  migrate:
+    build: .
+    command: ["python", "-m", "app.migrate"]
+    environment: &environment
+      DATABASE_URL: postgresql://walnut:local-development-only@db:5432/walnut
+      PROCESSING_DELAY_SECONDS: "30"
+      WORKER_CONCURRENCY: "20"
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment: *environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment: *environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+volumes:
+  postgres_data:
