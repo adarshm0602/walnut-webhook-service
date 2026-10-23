@@ -10,6 +10,10 @@ reliably in the background. Built for the Walnut Folks backend assessment.
 - API health: https://walnut-transactions-free.onrender.com/
 - Interactive API docs: https://walnut-transactions-free.onrender.com/docs
 
+Warm cloud benchmark: **20 new + 40 duplicate requests, concurrency 4, p95 276.43 ms,
+maximum 445.91 ms; 20/20 completed in 30.679–30.967 seconds**. A concurrency-20 burst
+returned retryable 503s on this free instance. See [measured evidence](docs/verification.md).
+
 Free Render hosting sleeps after inactivity; open the health URL and allow the instance
 about a minute to wake before testing. The first request can exceed 500 ms. The free
 database expires on **22 November 2026**. See hosting limits below.

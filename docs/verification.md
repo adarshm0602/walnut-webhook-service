@@ -36,7 +36,7 @@ deliveries, and request concurrency capped at 20:
 | Processing duration | 30.122–30.133 seconds |
 
 These figures are one local run, not a guarantee for arbitrary load or cloud regions.
-The public deployment needs its own run from an identified client location.
+Cloud results are measured separately below.
 
 ## Process-level recovery
 
@@ -53,9 +53,56 @@ Measured recovery was **89.66 seconds after replacement startup**, including wai
 the real lease to expire and repeating the 30-second work. Recovery does not promise a
 30-second completion when a worker crashes.
 
+## Public cloud verification
+
+[Public API](https://walnut-transactions-free.onrender.com/) ·
+[Interactive documentation](https://walnut-transactions-free.onrender.com/docs) ·
+[Cloud JSON report](benchmark-cloud.json)
+
+Verified on 23 October 2026 at commit `4412467`, with a free Render Docker web service
+and private-network free PostgreSQL in Singapore. The client was the developer's macOS
+machine (configured timezone Asia/Kolkata). HTTP measurements include the network path;
+the health request wakes the service before timing POST requests.
+
+```sh
+uv run python scripts/benchmark.py \
+  --base-url https://walnut-transactions-free.onrender.com \
+  --concurrency 4 --output .local/benchmark-cloud.json
+```
+
+| Measurement | Warm free cloud service |
+| --- | ---: |
+| Unique transactions / duplicate deliveries | 20 / 40 |
+| Maximum in-flight HTTP requests | 4 |
+| Acknowledgment p50 | 146.55 ms |
+| Acknowledgment p95 | 276.43 ms |
+| Acknowledgment p99 / maximum | 445.91 ms |
+| Completed transactions | 20 / 20 |
+| Processing duration | 30.679–30.967 seconds |
+
+All 60 requests returned 202; duplicates were recognized, and all 20 final records
+were retrieved. A separate **concurrency-20 stress attempt returned retryable 503s** on
+the free tier. The measured light-load pass does not establish the same latency at higher
+load. The worker was improved to share idle queue polling across its 20 slots, reducing
+empty queries from 20 per interval to one.
+
+The browser flow submitted `txn_cloud_browser_001` via public Swagger: 202 with
+`duplicate: false`, then a persisted `PROCESSED` result after 30.068 seconds. That record
+retained its original final timestamps after the next service redeployment. Public checks
+also verify identical duplicates (202), conflicting payloads (409), invalid input (422),
+and unknown IDs (404).
+
+### Hosting limits
+
+The free service sleeps after 15 idle minutes; waking can take 50 seconds or more and
+**does not meet the 500 ms target**. Worker processing pauses while asleep and resumes
+from durable jobs on wake. The free database expires **22 November 2026**. Export or
+upgrade before expiry to retain data. Workspace free instance hours are shared. There is
+no claim of an always-on SLA; that would need different hosting.
+
 ## CI and container verification
 
-[Initial successful CI run](https://github.com/adarshm0602/walnut-webhook-service/actions/runs/39931553843)
-validated the original suite and built the Docker Compose stack before running a real HTTP
-demo to completion. The submission improvements are subject to the same CI workflow;
-check the latest branch run before submission.
+[Successful submission CI](https://github.com/adarshm0602/walnut-webhook-service/actions/runs/39937399339)
+passed all 31 tests, lint/format checks, and a Docker Compose build with a real HTTP
+acceptance/duplicate/30-second completion demo. The free supervised deployment was
+additionally verified through the public API and browser as described above.

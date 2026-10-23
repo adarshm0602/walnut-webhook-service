@@ -1,0 +1,24 @@
+{
+  "verified_at": "2026-10-23T10:15:04.138469+00:00",
+  "base_url": "https://walnut-transactions-free.onrender.com",
+  "unique_transactions": 20,
+  "duplicate_requests": 40,
+  "concurrency": 4,
+  "transport": "real HTTP, persistent connections",
+  "acknowledgment_ms": {
+    "p50": 146.55,
+    "p95": 276.43,
+    "p99": 445.91,
+    "maximum": 445.91
+  },
+  "completed_transactions": 20,
+  "processing_seconds": {
+    "minimum": 30.679,
+    "maximum": 30.967
+  },
+  "acknowledgment_target_met": true,
+  "service_commit": "44124677fcb5e256519b9d650c2c4a367d79beab",
+  "hosting": "Render free web + free PostgreSQL, Singapore",
+  "client": "Developer macOS machine; configured timezone Asia/Kolkata",
+  "scope": "Warm service; health request before POST measurements; concurrency 4. A separate concurrency-20 stress attempt returned retryable 503s."
+}
