@@ -221,19 +221,26 @@ waits for all 20 final results, and verifies the minimum 30-second processing de
 It exits nonzero on failed acknowledgments, missed latency targets, or incomplete work.
 See [verification evidence](docs/verification.md) for measured results and their scope.
 
-## Manual cloud deployment (after local acceptance)
+## Free cloud deployment
 
-The [Render Blueprint](render.yaml) declares an API, a continuously running worker,
-and private-network PostgreSQL in Singapore. It uses paid, always-on compute to avoid
-the free web service's idle cold starts. Review Render's displayed price before applying.
-The default configuration is approximately USD 20/month in base compute at the prices
-checked on 23 October 2026, before tax and usage overages. No workspace upgrade is needed.
-Applying a Blueprint is an explicit deployment action; checking this file into Git alone
-does not provision infrastructure.
+The [Render Blueprint](render.yaml) runs the API and worker as separate supervised
+processes in one free web container, with private-network free PostgreSQL in Singapore.
+`python -m app.service` applies migrations before starting both processes. If either
+process exits unexpectedly, the supervisor stops its sibling and exits nonzero so Render
+can restart the service. Docker Compose and local development retain separate services.
 
-The API runs migrations in a pre-deploy step. The worker also applies idempotent migrations
-at startup so initial creation cannot race the API. PostgreSQL advisory locking serializes
-concurrent migrations. Automatic redeploys wait for GitHub checks to pass.
+This is a free interview demo, with explicit hosting limits:
+
+- Render sleeps the web service after 15 minutes without incoming traffic. The first
+  request can take about a minute and exceeds the assignment's 500 ms target.
+- The worker pauses while the container sleeps; durable pending jobs resume on wake.
+- Free PostgreSQL expires after 30 days (this instance: 22 November 2026). Export or
+  upgrade before expiry to preserve data. There are no free database backups.
+- Free instance hours are shared across the workspace. This is not an always-on SLA.
+
+Warm API latency is measured separately from wake-up time. Predictable first-request
+latency and continuous background processing require always-on hosting. Automatic
+redeploys wait for GitHub checks to pass. Applying the Blueprint creates only free plans.
 
 For a provider-neutral deployment:
 
@@ -245,10 +252,8 @@ For a provider-neutral deployment:
 6. Keep the web service and worker running, and place both close to the database.
 7. Verify the public health check, run the demo against the public URL, and measure latency.
 
-Use an always-on service for predictable response times; sleeping instances and cold
-starts can miss the 500 ms requirement. Add the public API URL to this README after
-deployment, then put the repo, API URL, instructions, and verification evidence into
-the single Google Doc requested by the recruitment email.
+Use always-on hosting for predictable response times. The free demo intentionally
+trades that guarantee for zero hosting cost; the durable queue design remains the same.
 
 ## Scope
 
